@@ -1,0 +1,110 @@
+
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>RT90 larmkarta</title>
+  <style>
+    :root{--bg:#f5f5f7;--card:#fff;--text:#111;--muted:#666;--blue:#007aff;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+    .wrap{max-width:760px;margin:0 auto;padding:18px}
+    h1{font-size:28px;margin:6px 0 10px}
+    textarea{width:100%;min-height:240px;font-size:16px;line-height:1.35;padding:14px;border:1px solid #d1d1d6;border-radius:16px;box-sizing:border-box;background:var(--card)}
+    button{appearance:none;border:0;border-radius:14px;padding:14px 18px;font-size:16px;font-weight:700;margin:10px 10px 0 0}
+    .primary{background:var(--blue);color:#fff}.secondary{background:#e5e5ea;color:#111}
+    .card{background:var(--card);border:1px solid #e1e1e6;border-radius:16px;padding:14px;margin-top:14px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .kv{font-size:13px;color:var(--muted)}
+    .val{font-size:18px;font-weight:800;word-break:break-word;margin-top:4px}
+    a{color:var(--blue);text-decoration:none;word-break:break-word}
+    .small{font-size:13px;color:var(--muted);line-height:1.4}
+    .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .pill{display:inline-block;background:#e8f0ff;color:#0a4fc2;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><h1>RT90 larmkarta</h1><span class="pill">iPhone-vänlig</span></div>
+    <p>Klistra in hela larm-SMS:et. Sidan hittar RT90-koordinaterna och öppnar Google Maps.</p>
+    <textarea id="sms" placeholder="Exempel:
+PositionRT90 : X=6588737 Y=1608220
+Kommun : Ekerö"></textarea>
+    <div>
+      <button class="primary" onclick="processText()">Visa på karta</button>
+      <button class="secondary" onclick="copyLink()">Kopiera länk</button>
+      <button class="secondary" onclick="document.getElementById('sms').value='';hideOut()">Rensa</button>
+    </div>
+    <div id="out" class="card" style="display:none">
+      <div class="grid">
+        <div><div class="kv">X</div><div class="val" id="xv"></div></div>
+        <div><div class="kv">Y</div><div class="val" id="yv"></div></div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div><div class="kv">Latitud</div><div class="val" id="latv"></div></div>
+        <div><div class="kv">Longitud</div><div class="val" id="lonv"></div></div>
+      </div>
+      <div style="margin-top:12px"><a id="mapslink" href="#" target="_blank" rel="noopener">Öppna i Google Maps</a></div>
+      <div class="small" id="status" style="margin-top:8px"></div>
+    </div>
+  </div>
+<script>
+  let currentUrl = '';
+  function hideOut(){document.getElementById('out').style.display='none';currentUrl='';}
+  function rt90ToWgs84(x,y){
+    const e2=0.006674372230614;
+    const a=6377397.155;
+    const f=1/299.1528128;
+    const lat0=0;
+    const lon0=15*Math.PI/180;
+    const k0=1;
+    const x0=0;
+    const y0=1500000;
+    const n=f/(2-f);
+    const A=a/(1+n)*(1+n*n/4+n**4/64);
+    const beta=[0, n/2-2*n*n/3+5*n**3/16, 13*n*n/48-3*n**3/5, 61*n**3/240];
+    const xi=(x-x0)/(A*k0);
+    const eta=(y-y0)/(A*k0);
+    let lat=xi, lon=eta;
+    for(let j=1;j<4;j++){
+      lat += beta[j]*Math.sin(2*j*xi)*Math.cosh(2*j*eta);
+      lon += beta[j]*Math.cos(2*j*xi)*Math.sinh(2*j*eta);
+    }
+    const lat1=lat;
+    const lon1=lon0+lon;
+    const e2p=e2/(1-e2);
+    const sinphi=Math.sin(lat1), cosphi=Math.cos(lat1);
+    const N=a/Math.sqrt(1-e2*sinphi*sinphi);
+    const t=Math.tan(lat1), C=e2p*cosphi*cosphi;
+    const A2=(y-y0)/(N*k0);
+    const M=(x-x0)/k0;
+    const phi=lat1;
+    const lam=lon1;
+    return {lat:phi*180/Math.PI, lon:lam*180/Math.PI};
+  }
+  function processText(){
+    const text=document.getElementById('sms').value;
+    const m=text.match(/PositionRT90\s*:\s*X=(\d+)\s*Y=(\d+)/i) || text.match(/X=(\d+)\s*Y=(\d+)/i);
+    const out=document.getElementById('out');
+    out.style.display='block';
+    if(!m){document.getElementById('status').textContent='Hittade inte koordinaterna i texten.';return;}
+    const x=Number(m[1]), y=Number(m[2]);
+    const c=rt90ToWgs84(x,y);
+    document.getElementById('xv').textContent=x;
+    document.getElementById('yv').textContent=y;
+    document.getElementById('latv').textContent=c.lat.toFixed(6);
+    document.getElementById('lonv').textContent=c.lon.toFixed(6);
+    currentUrl=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
+    document.getElementById('mapslink').href=currentUrl;
+    document.getElementById('status').textContent='Öppnar Google Maps med vägledning om du trycker på länken eller knappen ovan.';
+    window.location.href=currentUrl;
+  }
+  async function copyLink(){
+    if(!currentUrl){processText();}
+    if(currentUrl){try{await navigator.clipboard.writeText(currentUrl);document.getElementById('status').textContent='Kartlänken kopierad.';}catch(e){document.getElementById('status').textContent='Kunde inte kopiera, men länken finns ovan.';}}
+  }
+</script>
+</body>
+</html>
